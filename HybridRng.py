@@ -7,6 +7,10 @@ import argparse
 import numpy as np
 from blake3 import blake3
 from scipy.stats import chi2 as chi2_dist
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
 
 # =========================================================
 # Hybrid RNG Implementation (compatible with NIST test suite)
@@ -159,6 +163,25 @@ def autocorr(samples, lag=1):
     den = np.sum((samples - mean)**2)
     return num/den if den > 0 else 0
 
+def plot_histograms(hybrid_samples, py_samples, np_samples, n_bins=50, save_dir="reports/figures"):
+    os.makedirs(save_dir, exist_ok=True)
+
+    rng_data = {
+        "Hybrid_RNG": hybrid_samples,
+        "Python_RNG": py_samples,
+        "NumPy_RNG": np_samples,
+    }
+
+    for name, samples in rng_data.items():
+        plt.figure(figsize=(8, 5))
+        plt.hist(samples, bins=n_bins, range=(0, 1), alpha=0.7, label=name)
+        plt.legend()
+        plt.title(f"Histogram of {name}")
+        save_path = os.path.join(save_dir, f"hist_{name}.png")
+        plt.savefig(save_path)
+        print(f"[PLOT] Saved {name} histogram to {save_path}")
+        plt.close()
+
 
 # =========================================================
 # Runner
@@ -200,6 +223,7 @@ def run_all(n_samples=10000, n_bins=100, reseed_interval=0, seed_for_hybrid=None
     evaluate_rng(py_samples, "Python RNG", n_bins)
     evaluate_rng(np_samples, "NumPy RNG", n_bins)
 
+    plot_histograms(hybrid_samples, py_samples, np_samples, n_bins)
 
 # =========================================================
 # CLI
