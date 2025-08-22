@@ -15,8 +15,7 @@ import matplotlib.pyplot as plt
 # =========================================================
 # Hybrid RNG Implementation (compatible with NIST test suite)
 # =========================================================
-import os, time
-from blake3 import blake3
+
 
 class HybridRNG:
     def __init__(self, seed=None, reseed_interval=0, verbose=True):
@@ -35,7 +34,7 @@ class HybridRNG:
 
         # Derive a 32-byte secret key from the provided seed
         self.secret_key = blake3(seed_bytes).digest()
-        self.state = blake3(b"state:" + self.secret_key).digest()
+        # self.state = blake3(b"state:" + self.secret_key).digest()
         self.counter = 0
         self.reseed_interval = reseed_interval
 
@@ -93,7 +92,7 @@ class HybridRNG:
     def next(self):
         """Uniform float in [0,1)."""
         val = int.from_bytes(self._consume(32), "big")
-        return val / (1 << 256)
+        return val / (1 << 256) 
 
     def next_in_range(self, a=0.0, b=1.0):
         return a + self.next() * (b - a)
@@ -167,7 +166,7 @@ def plot_histograms(hybrid_samples, py_samples, np_samples, n_bins=50, save_dir=
     os.makedirs(save_dir, exist_ok=True)
 
     rng_data = {
-        "Hybrid_RNG": hybrid_samples,
+        "Hybrid_RNG": hybrid_samples,s
         "Python_RNG": py_samples,
         "NumPy_RNG": np_samples,
     }
