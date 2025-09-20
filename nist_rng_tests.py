@@ -9,7 +9,7 @@ import numpy as np
 from scipy.stats import chi2
 
 # Local import from your RNG file
-from HybridRng import HybridRNG
+from updated_rng_test import B3GUARD
 
 # Significance level for all tests
 ALPHA = 0.01
@@ -17,7 +17,7 @@ ALPHA = 0.01
 # ==========================================================
 # Helpers
 # ==========================================================
-def bits_from_rng(rng: HybridRNG, n_bits: int, burn_in: int):
+def bits_from_rng(rng: B3GUARD, n_bits: int, burn_in: int):
     for _ in range(burn_in):
         rng.rand_raw()
     bits = []
@@ -485,7 +485,7 @@ def run_all_tests(args):
     print("=" * 60 + f"\nNIST SP 800-22 Statistical Test Suite (Final Version)\n" + "-" * 60)
     print(f"Seed: {args.seed}, Bit Length: {args.n_bits}, Burn-in: {args.burn_in}")
     print("=" * 60)
-    rng = HybridRNG(seed=args.seed, reseed_interval=0)
+    rng = B3GUARD(seed=args.seed, reseed_interval=0)
     bits = bits_from_rng(rng, args.n_bits, args.burn_in)
     print(f"Generated {len(bits)} bits for testing.\n")
 
@@ -531,7 +531,7 @@ def run_all_tests(args):
 # CLI
 # ==========================================================
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run NIST SP800-22 style tests on HybridRNG.")
+    parser = argparse.ArgumentParser(description="Run NIST SP800-22 style tests on B3GUARD.")
     parser.add_argument("--seed", type=int, default=None, help="Seed for the RNG. Defaults to current time.")
     parser.add_argument("--n_bits", type=int, default=1_000_000, help="Number of bits to generate for testing.")
     parser.add_argument("--burn_in", type=int, default=1000, help="Number of RNG generations to discard before testing.")

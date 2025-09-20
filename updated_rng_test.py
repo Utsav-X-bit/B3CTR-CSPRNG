@@ -1,3 +1,6 @@
+import time
+import random
+import numpy as np
 from blake3 import blake3
 import os
 import struct
@@ -8,7 +11,7 @@ def rotl(x: int, r: int) -> int:
     r &= 63
     return ((x << r) & MASK64) | (x >> (64 - r))
 
-class HybridRNG:
+class B3GUARD:
     """
     Counter-mode BLAKE3 with key derived from seed. Each 32-byte block is
     mixed into a 64-bit output using cross-chunk whitening + SplitMix64.
@@ -24,7 +27,8 @@ class HybridRNG:
         """
         if seed is None:
             # Still allow deterministic behavior if user passes a seed explicitly
-            seed_bytes = os.urandom(32) ^ time.time_ns()
+            seed = int.from_bytes(os.urandom(32)) ^ time.time_ns()
+            seed_bytes = seed.to_bytes(32,'big', signed=False)
         else:
             seed_bytes = seed.to_bytes(32, 'big', signed=False)
 
@@ -114,3 +118,39 @@ class HybridRNG:
             out.append(f'{v:064b}')
         bitstring = ''.join(out)
         return bitstring[:n_bits]
+
+def benchmark(n: int = 10_000_000):
+    """
+    Benchmark B3GUARD, Python's random, and NumPy random
+    for generating n random floats in [0,1).
+    """
+    from __main__ import B3GUARD   # if B3GUARD is in same file
+
+    rng = B3GUARD(seed=None)
+
+    results = {}
+
+    # --- B3GUARD ---
+    start = time.perf_counter()
+    for _ in range(n):
+        rng.next()
+    results["B3GUARD"] = time.perf_counter() - start
+
+    # --- Python random ---
+    start = time.perf_counter()
+    for _ in range(n):
+        random.random()
+    results["Python random"] = time.perf_counter() - start
+
+    # --- NumPy random ---
+    start = time.perf_counter()
+    np.random.random(n)   # vectorized
+    results["NumPy random"] = time.perf_counter() - start
+
+    # Print results
+    for k, v in results.items():
+        print(f"{k:15s}: {v:.4f} seconds")
+
+
+if __name__ == "__main__":
+    benchmark(10_000_0)  # try 1e6 first, then go to 1e7

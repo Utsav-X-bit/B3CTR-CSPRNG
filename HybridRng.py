@@ -1,4 +1,3 @@
-# HybridRng.py
 import os
 import time
 import math
@@ -13,11 +12,11 @@ import matplotlib.pyplot as plt
 
 
 # =========================================================
-# Hybrid RNG Implementation (compatible with NIST test suite)
+# B3CTR RNG Implementation (compatible with NIST test suite)
 # =========================================================
 
 
-class HybridRNG:
+class B3CTR:
     def __init__(self, seed=None, reseed_interval=0, verbose=True):
         # Accept int|bytes|str|None
         if seed is None:
@@ -34,7 +33,7 @@ class HybridRNG:
 
         # Derive a 32-byte secret key from the provided seed
         self.secret_key = blake3(seed_bytes).digest()
-        # self.state = blake3(b"state:" + self.secret_key).digest()
+        self.state = blake3(b"state:" + self.secret_key).digest()
         self.counter = 0
         self.reseed_interval = reseed_interval
 
@@ -90,9 +89,10 @@ class HybridRNG:
         return int.from_bytes(self._consume(8), "big")
 
     def next(self):
-        """Uniform float in [0,1)."""
-        val = int.from_bytes(self._consume(32), "big")
-        return val / (1 << 256) 
+        """Uniform float in [0,1) using 53 random bits (float64 precision)."""
+        val = self.next_uint(53)  # get exactly 53 random bits
+        return val / (1 << 53)  
+
 
     def next_in_range(self, a=0.0, b=1.0):
         return a + self.next() * (b - a)
@@ -112,6 +112,7 @@ class HybridRNG:
             r = int.from_bytes(self._consume(32), "big")
             if r < limit:
                 return min_val + (r % span)
+
 
     def next_bytes(self, n):
         """Efficiently get n random bytes (needed for NIST tests)."""
@@ -162,11 +163,11 @@ def autocorr(samples, lag=1):
     den = np.sum((samples - mean)**2)
     return num/den if den > 0 else 0
 
-def plot_histograms(hybrid_samples, py_samples, np_samples, n_bins=50, save_dir="reports/figures"):
+def plot_histograms(B3CTR_samples, py_samples, np_samples, n_bins=50, save_dir="reports/figures"):
     os.makedirs(save_dir, exist_ok=True)
 
     rng_data = {
-        "Hybrid_RNG": hybrid_samples,s
+        "B3CTR_RNG": B3CTR_samples,
         "Python_RNG": py_samples,
         "NumPy_RNG": np_samples,
     }
@@ -180,6 +181,30 @@ def plot_histograms(hybrid_samples, py_samples, np_samples, n_bins=50, save_dir=
         plt.savefig(save_path)
         print(f"[PLOT] Saved {name} histogram to {save_path}")
         plt.close()
+
+
+def benchmark(rng_type="B3CTR",N = 10_000_000):
+    start = time.perf_counter()
+    
+    if rng_type == "B3CTR":
+        rng = B3CTR(seed=None, verbose=False)
+        for _ in range(N):
+            rng.rand_raw()
+
+    elif rng_type == "python":
+        random.seed(123)
+        for _ in range(N):
+            random.getrandbits(64)
+
+    elif rng_type == "numpy":
+        np.random.seed(123)
+        np.random.randint(0, 2**64, size=N, dtype=np.uint64)
+
+    else:
+        raise ValueError("rng_type must be 'B3CTR', 'python', or 'numpy'")
+    
+    end = time.perf_counter()
+    print(f"{rng_type} took {end - start:.3f} seconds")
 
 
 # =========================================================
@@ -198,37 +223,43 @@ def evaluate_rng(samples, name, n_bins=100):
     print(f"Autocorrelation (lag=1): {ac:.6f} -> {'PASS' if abs(ac)<0.05 else 'FAIL'}")
 
 
-def run_all(n_samples=10000, n_bins=100, reseed_interval=0, seed_for_hybrid=None):
-    print("=== Hybrid RNG Quick Evaluation ===")
-    rng = HybridRNG(seed_for_hybrid, reseed_interval=reseed_interval)
+def run_all(n_samples=10000, n_bins=100, reseed_interval=0, seed_for_B3CTR=None):
+    print("=== B3CTR RNG Quick Evaluation ===")
+    rng = B3CTR(seed_for_B3CTR, reseed_interval=reseed_interval)
 
     print("\nGenerating samples...")
-    hybrid_samples = [rng.next() for _ in range(n_samples)]
+    B3CTR_samples = [rng.next() for _ in range(n_samples)]
 
     # Save bitstream for external tests
-    bit_stream = ''.join('1' if x > 0.5 else '0' for x in hybrid_samples)
+    bit_stream = ''.join('1' if x > 0.5 else '0' for x in B3CTR_samples)
     with open("rng_bit_output.txt", "w") as f:
         f.write(bit_stream)
 
     with open("rng_output.txt", "w") as f:
-        for x in hybrid_samples:
+        for x in B3CTR_samples:
             f.write('1\n' if x > 0.5 else '0\n')
 
     # Compare with Python and NumPy RNGs
     py_samples = [random.random() for _ in range(n_samples)]
     np_samples = np.random.random(n_samples)
 
-    evaluate_rng(hybrid_samples, "Hybrid RNG", n_bins)
+    evaluate_rng(B3CTR_samples, "B3CTR RNG", n_bins)
     evaluate_rng(py_samples, "Python RNG", n_bins)
     evaluate_rng(np_samples, "NumPy RNG", n_bins)
 
-    plot_histograms(hybrid_samples, py_samples, np_samples, n_bins)
+    plot_histograms(B3CTR_samples, py_samples, np_samples, n_bins)
+
+
+    # benchmark("B3CTR")
+    # benchmark("python")
+    # benchmark("numpy")
+
 
 # =========================================================
 # CLI
 # =========================================================
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Hybrid RNG Runner & Quick Tests")
+    parser = argparse.ArgumentParser(description="B3CTR RNG & Quick Tests")
     parser.add_argument("--samples", type=int, default=10000, help="Number of random samples to generate")
     parser.add_argument("--bins", type=int, default=100, help="Number of bins for chi-square and entropy tests")
     parser.add_argument("--reseed_interval", type=int, default=0, help="Reseed interval (0 disables reseeding)")
@@ -237,3 +268,4 @@ if __name__ == "__main__":
 
     run_all(n_samples=args.samples, n_bins=args.bins,
             reseed_interval=args.reseed_interval, seed_for_hybrid=args.seed)
+ 
